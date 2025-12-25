@@ -95,12 +95,12 @@ const clearDB = async () => {
 // --- CONSTANTS & CONFIG ---
 const COLORS = ['#D42426', '#165B33', '#F8B229']; // Red, Green, Gold
 const SECRET_COLOR = '#4B0082'; // Indigo/Purple for Secret Gift
-const VIETNAMESE_ALPHABET = [
-  'A', 'Ă', 'Â', 'B', 'C', 'D', 'Đ', 'E', 'Ê', 
-  'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'Ô', 
-  'Ơ', 'P', 'Q', 'R', 'S', 'T', 'U', 'Ư', 'V'
+// Bảng chữ cái mở rộng để đủ 30 phần quà thường
+const VIETNAMESE_ALPHABET_EXTENDED = [
+  'A', 'Ă', 'Â', 'B', 'C', 'D', 'Đ', 'E', 'Ê', 'F',
+  'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'Ô', 
+  'Ơ', 'P', 'Q', 'R', 'S', 'T', 'U', 'Ư', 'V', 'X'
 ]; 
-const GIVERS_27 = ['Nghiệp', 'Hiếu', 'An'];
 
 const BG_PRESETS = [
   { name: 'Xanh Lá', value: 'radial-gradient(circle at center, #1a472a 0%, #0d2114 100%)' },
@@ -127,7 +127,7 @@ const I18N = {
     toastUpdated: "Đã cập nhật quà",
     toastCopied: "Đã nhân bản quà",
     toastShuffled: "Đã trộn vị trí quà",
-    toastGenerated: "Đã tạo 27 quà + 1 Secret",
+    toastGenerated: "Đã tạo bộ quà (Nghiệp, Hiếu, An)",
     toastCleared: "Đã xóa tất cả quà!",
     confirmClear: "Bạn có chắc chắn muốn xóa TẤT CẢ quà không?",
     toastErrorStorage: "Lỗi: File quá lớn hoặc ổ cứng đầy!",
@@ -140,7 +140,7 @@ const I18N = {
     uploadLabel: "GIF/Ảnh (Max 100MB)",
     giverLabel: "Người tặng",
     shuffle: "Trộn quà",
-    gen27: "Tạo 27 quà (ABC...)",
+    gen27: "Tạo bộ quà chuẩn",
     clearAll: "Xóa tất cả",
     settings: "Cài đặt",
     bgLabel: "Hình nền",
@@ -165,7 +165,7 @@ const I18N = {
     toastUpdated: "Gift updated",
     toastCopied: "Gift copied",
     toastShuffled: "Gifts shuffled",
-    toastGenerated: "Generated 27 sample gifts + 1 Secret",
+    toastGenerated: "Generated standard gift set",
     toastCleared: "All gifts cleared!",
     confirmClear: "Are you sure you want to delete ALL gifts?",
     toastErrorStorage: "Storage Error: File too big!",
@@ -178,7 +178,7 @@ const I18N = {
     uploadLabel: "GIF/Img (Max 100MB)",
     giverLabel: "Giver",
     shuffle: "Shuffle",
-    gen27: "Gen 27 Gifts",
+    gen27: "Gen Standard Set",
     clearAll: "Delete All",
     settings: "Settings",
     bgLabel: "Background",
@@ -203,7 +203,7 @@ const I18N = {
     toastUpdated: "礼物已更新",
     toastCopied: "礼物已复制",
     toastShuffled: "礼物已洗牌",
-    toastGenerated: "已生成 27 个示例礼物 + 1 神秘礼物",
+    toastGenerated: "已生成标准礼物集",
     toastCleared: "所有礼物已清空！",
     confirmClear: "你确定要删除所有礼物吗？",
     toastErrorStorage: "存储错误！",
@@ -216,7 +216,7 @@ const I18N = {
     uploadLabel: "图片",
     giverLabel: "送礼人",
     shuffle: "洗牌",
-    gen27: "生成 27 礼物",
+    gen27: "生成标准礼物",
     clearAll: "删除所有",
     settings: "设置",
     bgLabel: "背景",
@@ -701,33 +701,63 @@ export default function App() {
     showToast(I18N[lang].toastShuffled);
   };
 
+  // --- NEW GENERATE LOGIC ---
+  // Nghiệp: 10 gifts
+  // An: 9 gifts + 1 Xít rịt
+  // Hiếu: 11 gifts
   const handleGenerate27 = async () => {
     setIsLoading(true);
     await clearDB();
     const newGifts = [];
-    
-    VIETNAMESE_ALPHABET.forEach((letter, index) => {
-      const giverIndex = Math.floor(index / 9);
-      const giverName = GIVERS_27[giverIndex] || "An";
-      const gifPath = GIVER_GIF_MAP[giverName] || null;
+    let currentLetterIndex = 0;
 
-      newGifts.push({
-        id: Date.now() + index, 
-        name: letter, 
-        giver: giverName,
-        fullImage: gifPath,
-        isSecret: false 
-      });
-    });
+    // Helper to add gifts
+    const addGifts = (giverName, count, isSecret = false, secretName = null, secretImg = null) => {
+      for (let i = 0; i < count; i++) {
+        let name = "";
+        let gif = GIVER_GIF_MAP[giverName] || null;
+        let finalSecret = isSecret;
+        let finalImg = gif;
 
-    // Add Secret Gift
+        if (isSecret && secretName && i === count - 1) { // Add secret at the end of the batch
+           name = secretName;
+           finalImg = secretImg || gif;
+           finalSecret = true;
+        } else {
+           name = VIETNAMESE_ALPHABET_EXTENDED[currentLetterIndex] || `Quà ${currentLetterIndex + 1}`;
+           currentLetterIndex++;
+           finalSecret = false;
+        }
+
+        newGifts.push({
+          id: Date.now() + newGifts.length,
+          name: name,
+          giver: giverName,
+          fullImage: finalImg,
+          isSecret: finalSecret
+        });
+      }
+    };
+
+    // 1. Nghiệp: 10 phần
+    addGifts("Nghiệp", 10);
+
+    // 2. An: 9 phần + 1 Xít rịt (Total 10)
+    // We add 9 normal gifts first, then 1 special "Xít rịt"
+    // Actually the request says "9 phần quà + 1 Xít rịt", implies 10 items for An.
+    // Let's add 9 normal letters for An.
+    addGifts("An", 9);
+    // Add "Xít rịt" separately
     newGifts.push({
-      id: Date.now() + 999, // Ensure unique ID
-      name: "Secret",
-      giver: "BTC",
-      fullImage: "/images/secret-img.png",
-      isSecret: true
+        id: Date.now() + newGifts.length,
+        name: "Xít rịt",
+        giver: "An",
+        fullImage: "/images/secret-img.png", // Or An's GIF if secret img not available
+        isSecret: true
     });
+
+    // 3. Hiếu: 11 phần
+    addGifts("Hiếu", 11);
 
     for (const g of newGifts) {
       await saveGiftToDB(g);
